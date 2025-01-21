@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot with Voice Input</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gujarati:wght@400&display=swap" rel="stylesheet">
+    <style>
+
+        input[type="text"] {
+            font-family: 'Noto Sans Gujarati', sans-serif;
+        }
+
+        /* Modern Chatbot Styles */
+        .chat-container {
+            width: 100%;
+            height: calc(100vh - 200px); /* Increased chat window height */
+            min-height: 400px; /* Increased minimum height */
+            border: none;
+            border-radius: 20px;
+            overflow-y: auto;
+            padding: 15px;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+            scrollbar-width: thin;
+            scrollbar-color: #ccc transparent;
+            margin-bottom: 10px;
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb {
+            background-color: #ccc;
+            border-radius: 3px;
+        }
+
+        .chat-bubble {
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border-radius: 18px;
+            background-color: #f0f2f5;
+            max-width: 75%;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            font-size: 0.95rem;
+            line-height: 1.4;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .chat-bubble .timestamp {
+            position: absolute;
+            bottom: 2px;
+            right: 8px;
+            font-size: 0.7rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .chat-bubble.bot {
+            background-color: #e3f2fd;
+            border-bottom-left-radius: 5px;
+            margin-right: auto;
+        }
+
+        .chat-bubble.user {
+            background-color: #e8f5e9;
+            border-bottom-right-radius: 5px;
+            margin-left: auto;
+            align-self: flex-end;
+        }
+
+        .chat-box {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            margin: 10px auto;
+            max-width: 1200px;
+            background: white;
+            border-radius: 20px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            height: calc(100vh - 80px); /* Adjust to fit viewport */
+            overflow: hidden;
+        }
+
+        .chat-box input {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: 1px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .chat-box input:focus {
+            outline: none;
+            border-color: #5C6AC4;
+            box-shadow: 0 0 0 2px rgba(92, 106, 196, 0.2);
+        }
+
+        .chat-box button {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin: 3px;
+            font-size: 0.9rem;
+        }
+
+        .voice-button {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            color: #495057;
+        }
+
+        .active-voice {
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+        }
+
+        /* Enhanced Mobile-responsive */
+        @media (max-width: 768px) {
+            .chat-container {
+                height: calc(100vh - 200px);
+                padding: 15px;
+            }
+            
+            .chat-box {
+                padding: 15px;
+                margin: 10px;
+            }
+            
+            .voice-box {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .voice-box > * {
+                width: 100% !important;
+                margin: 5px 0;
+            }
+            
+            .chat-bubble {
+                max-width: 85%;
+            }
+            
+            .header-title {
+                font-size: 1.5rem;
+                padding: 0 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .chat-container {
+                height: calc(100vh - 180px);
+            }
+            
+            .chat-bubble {
+                max-width: 90%;
+                font-size: 0.9rem;
+            }
+        }
+
+        .typing-indicator {
+            font-style: italic;
+            color: gray;
+        }
+
+        .voice-box {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 8px;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-top: 10px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+
+        /* Modern button and select styling */
+        .language-selection {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex: 1;
+        }
+
+        .language-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 2px;
+            font-family: 'Noto Sans Gujarati', sans-serif;
+        }
+
+        .selected-language {
+            font-size: 0.9rem;
+            color: #5C6AC4;
+            margin-top: 2px;
+            font-family: 'Noto Sans Gujarati', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        #language-select {
+            min-width: 120px;
+            padding: 8px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            background: white;
+            font-size: 0.85rem;
+            color: #495057;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #language-select:focus {
+            outline: none;
+            border-color: #5C6AC4;
+            box-shadow: 0 0 0 2px rgba(92, 106, 196, 0.2);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .suggestions-container {
+            display: none; /* Hidden by default */
+            position: fixed; /* Fix position to stay relative to the viewport */
+            bottom: 8%; /* 20% from the bottom */
+            left: 50%; /* Center horizontally */
+            transform: translateX(-50%); /* Adjust to the exact center */
+            width: 60%; /* Adjust width as needed */
+            max-height: 200px; /* Limit the height */
+            overflow-y: auto; /* Enable scrollbar for overflow */
+            z-index: 1000; /* Make sure it's above other elements */
+            background-color: #ffffff; /* White background for the card */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Add a subtle shadow */
+            border-radius: 10px; /* Rounded corners */
+            padding: 15px; /* Internal spacing */
+        }
+
+
+
+
+        .suggestion {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #f5f5f5; /* Light gray background */
+            text-align: center; /* Center the text */
+            font-weight: 500; /* Medium font weight */
+            transition: background-color 0.3s ease;
+        }
+
+        .suggestion:hover {
+            background-color: #d1f1d1; /* Light green hover effect */
+        }
+          .header-title {
+            text-align: center;
+            font-size: 2.0 rem;
+            color: #5C6AC4;
+            margin-top: 20px;
+            margin-bottom: 5px;
+            font-family: 'Noto Sans Gujarati', sans-serif;
+            text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.1);
+        }
+  
+        
+    </style>
+</head>
+<body>
+<h2 class="header-title">Jan Seva Kendra, Surendranagar (જન સેવા કેન્દ્ર, સુરેન્દ્રનગર)</h2>
+<div style="text-align: center; font-size: 0.7rem; color: #666; font-style: italic; margin: 5px 0; padding: 0 20px;">
+    For Verification of given Info Kindly go through respective Department's Website
+</div>
+
+
+<div class="container mt-2">
+    <div class="chat-box">
+        <!-- Chat messages will appear here -->
+        <div id="chat-container" class="chat-container"></div>
+        <div id="typing-indicator" class="typing-indicator"></div>
+
+        <!-- Input field that stores the voice input -->
+        <input type="text" id="user-input" class="form-control" placeholder="Type a message..." />
+
+        <!-- Suggestions container -->
+        <div id="suggestions-container" class="suggestions-container"></div>
+
+        <div class="voice-box">
+            <!-- Left side voice input button -->
+            <button id="voice-btn" class="btn btn-secondary voice-button" onclick="toggleVoiceInput()">🎙️ Start Voice Input</button>
+
+            <!-- Language selection with label -->
+            <div class="language-selection">
+                <div id="language-label" class="language-label">Your Language (તમારી ભાષા)</div>
+                <select id="language-select" class="form-control">
+                    <option value="english">English</option>
+                    <!-- <option value="hi">Hindi</option> -->
+                    <option value="gu">Gujarati</option>
+                </select>
+                <div id="selected-language" class="selected-language"></div>
+            </div>
+
+            <!-- Submit button on the right -->
+            <button class="btn btn-primary" onclick="submitQuery()">Submit</button>
+
+            <button class="btn btn-danger" onclick="clearChat()">Clear Chat</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    let isVoiceActive = false;
+    let recognition = null;
+    let finalTranscript = '';
+    let previousSpeech = '';
+
+    const placeholders = {
+        english: {
+            inputPlaceholder: "Type a message...",
+            voiceButton: "🎙️ Start Voice Input",
+            voiceButtonPause: "⏸️ Pause Voice Input",
+            submitButton: "Submit",
+            clearButton: "Clear Chat",
+            typingIndicator: "Bot is typing...",
+            errorMessage: "Sorry, something went wrong."
+        },
+        gu: {
+            inputPlaceholder: "સંદેશ લખો...",
+            voiceButton: "🎙️ વૉઇસ ઇનપુટ શરૂ કરો",
+            voiceButtonPause: "⏸️ વૉઇસ ઇનપુટ રોકો",
+            submitButton: "સબમિટ",
+            clearButton: "રીસેટ",
+            typingIndicator: "બોટ ટાઈપ કરી રહ્યું છે...",
+            errorMessage: "માફ કરશો, કંઈક ખોટું થયું."
+        }
+    };
+
+    function updateUILanguage(language) {
+        const lang = language || 'english';
+        const texts = placeholders[lang];
+
+        // Update UI elements
+        document.getElementById('user-input').placeholder = texts.inputPlaceholder;
+        document.getElementById('voice-btn').innerText = isVoiceActive ? texts.voiceButtonPause : texts.voiceButton;
+        document.querySelector('.btn.btn-primary').innerText = texts.submitButton;
+        document.querySelector('.btn.btn-danger').innerText = texts.clearButton;
+    }
+
+    // Update the language selection event listener
+    document.getElementById('language-select').addEventListener('change', function() {
+        const selectedLanguage = this.value;
+        updateUILanguage(selectedLanguage);
+        
+        // Update selected language display
+        const selectedLangDisplay = document.getElementById('selected-language');
+        if (selectedLanguage === 'english') {
+            selectedLangDisplay.innerText = "Your Language is English";
+        } else if (selectedLanguage === 'gu') {
+            selectedLangDisplay.innerText = "તમારી ભાષા ગુજરાતી છે";
+        }
+    });
+
+    // Initialize language display on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectedLanguage = document.getElementById('language-select').value;
+        const selectedLangDisplay = document.getElementById('selected-language');
+        if (selectedLanguage === 'english') {
+            selectedLangDisplay.innerText = "Your Language is English";
+        } else if (selectedLanguage === 'gu') {
+            selectedLangDisplay.innerText = "તમારી ભાષા ગુજરાતી છે";
+        }
+    });
+
+
+
+
+    // Submit the query to the chatbot
+    function submitQuery() {
+        var userQuery = document.getElementById('user-input').value;
+        var selectedLanguage = document.getElementById('language-select').value;
+        const texts = placeholders[selectedLanguage];
+
+        if (userQuery.trim() === '') {
+            return;
+        }
+
+        document.getElementById('user-input').value = '';
+        finalTranscript = '';
+
+        appendMessage(userQuery, 'user');
+        document.getElementById('typing-indicator').innerHTML = texts.typingIndicator;
+
+        $.ajax({
+            url: '/get_response',
+            method: 'POST',
+            data: { query: userQuery, language: selectedLanguage },
+            success: function(response) {
+                document.getElementById('typing-indicator').innerHTML = '';
+                appendMessage(response.reply, 'bot');
+                speakResponse(response.reply, selectedLanguage);  // Pass selected language
+            },
+            error: function() {
+                document.getElementById('typing-indicator').innerHTML = '';
+                appendMessage(texts.errorMessage, 'bot');
+            }
+        });
+
+        stopVoiceInput();
+    }
+
+
+    function appendMessage(message, sender) {
+        var chatContainer = document.getElementById('chat-container');
+        var messageDiv = document.createElement('div');
+        messageDiv.classList.add('chat-bubble', sender);
+        
+        // Create message text element
+        var messageText = document.createElement('span');
+        messageText.innerText = message;
+        messageDiv.appendChild(messageText);
+        
+        // Create and add timestamp
+        var timestamp = document.createElement('span');
+        timestamp.classList.add('timestamp');
+        
+        // Get current time in IST (+5:30)
+        let now = new Date();
+        let istTime = new Date(now.getTime()); // Add 5:30 hours
+        let hours = istTime.getHours();
+        let minutes = istTime.getMinutes();
+        let ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12; // Convert 0 to 12
+        minutes = minutes < 10 ? '0' + minutes : minutes;
+        
+        timestamp.innerText = `${hours}:${minutes} ${ampm}`;
+        messageDiv.appendChild(timestamp);
+        
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        
+        // If it's a bot message, read it
+        if (sender === 'bot') {
+            speakResponse(message, document.getElementById('language-select').value);
+        }
+    }
+
+
+    // Helper function to detect Gujarati text
+    function is_gujarati_text(text) {
+        return /[\u0A80-\u0AFF]/.test(text);
+    }
+
+    // Initialize speech synthesis
+    let synth = window.speechSynthesis;
+    let voices = [];
+
+    // Load and initialize voices
+    function loadVoices() {
+        return new Promise((resolve) => {
+            let voicesLoaded = () => {
+                voices = synth.getVoices();
+                console.log('Loaded voices:', voices.map(v => `${v.name} (${v.lang})`));
+                resolve(voices);
+            };
+
+            // Some browsers need onvoiceschanged event
+            if (speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = voicesLoaded;
+            }
+
+            // Try loading voices immediately
+            voices = synth.getVoices();
+            if (voices.length > 0) {
+                voicesLoaded();
+            }
+        });
+    }
+
+    // Initialize voices when document loads
+    document.addEventListener('DOMContentLoaded', () => {
+        loadVoices().then(() => {
+            console.log('Speech synthesis initialized');
+        });
+    });
+
+    function speakResponse(message, language) {
+        if (synth.speaking) {
+            synth.cancel();
+        }
+        const speech = new SpeechSynthesisUtterance(message);
+        
+        if (is_gujarati_text(message) || language === 'gu') {
+            speech.lang = 'gu-IN';
+            speech.rate = 1.5;  // Faster speed for Gujarati
+        } else {
+            speech.lang = 'en-US';
+            speech.rate = 1.5;  // Faster speed for English
+        }
+        
+        speech.volume = 1.0;
+        speech.pitch = 1.0;
+        
+        synth.speak(speech);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Toggle voice input state
+    function toggleVoiceInput() {
+        if (isVoiceActive) {
+            stopVoiceInput();
+        } else {
+            startVoiceInput();
+        }
+    }
+
+    // Start the voice input functionality
+    /* function startVoiceInput() {
+        // Change button color to indicate it's active
+        document.getElementById('voice-btn').classList.add('active-voice');
+        document.getElementById('voice-btn').innerText = '⏸️ Pause Voice Input';
+        isVoiceActive = true;
+
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.lang = 'en-US';
+            recognition.interimResults = true;  // Get interim results in real-time
+            recognition.continuous = true;
+
+            recognition.onstart = function() {
+                console.log('Voice input started');
+            };
+
+            recognition.onresult = function(event) {
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    let transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript = transcript; // Only update final transcript
+                        document.getElementById('user-input').value = finalTranscript;
+                        fetchSuggestions(finalTranscript);
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                // Update the input field with real-time speech
+                document.getElementById('user-input').value = finalTranscript + interimTranscript;
+            };
+
+            recognition.onerror = function(event) {
+                console.error('Speech recognition error', event);
+                stopVoiceInput(); // Stop if error occurs
+            };
+
+            recognition.start();
+        } else {
+            alert('Voice input is not supported in your browser.');
+        }
+    } */
+
+
+    function startVoiceInput() {
+    document.getElementById('voice-btn').classList.add('active-voice');
+    document.getElementById('voice-btn').innerText = '⏸️ Pause Voice Input';
+    isVoiceActive = true;
+
+    const selectedLanguage = document.getElementById('language-select').value;
+    let langCode = 'en-US'; // Default to English
+
+    if (selectedLanguage === 'gu') {
+        langCode = 'gu-IN'; // Gujarati
+    }
+
+    if ('webkitSpeechRecognition' in window) {
+        recognition = new webkitSpeechRecognition();
+        recognition.lang = langCode; // Set the language dynamically
+        recognition.interimResults = true;
+        recognition.continuous = true;
+
+        recognition.onstart = function() {
+            console.log('Voice input started');
+        };
+
+        recognition.onresult = function(event) {
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                let transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript = transcript;
+                    document.getElementById('user-input').value = finalTranscript;
+                    fetchSuggestions(finalTranscript);
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+            document.getElementById('user-input').value = finalTranscript + interimTranscript;
+        };
+
+        recognition.onerror = function(event) {
+            console.error('Speech recognition error', event);
+            stopVoiceInput();
+        };
+
+        recognition.start();
+    } else {
+        alert('Voice input is not supported in your browser.');
+    }
+}
+
+
+    // Stop the voice input functionality
+    function stopVoiceInput() {
+        // Change button color back to default
+        document.getElementById('voice-btn').classList.remove('active-voice');
+        document.getElementById('voice-btn').innerText = '🎙️ Start Voice Input';
+        isVoiceActive = false;
+
+        if (recognition) {
+            recognition.stop();
+        }
+    }
+
+    // Listen for user typing and show suggestions
+    document.getElementById('user-input').addEventListener('input', function() {
+        var userQuery = this.value;
+        if (userQuery.trim() !== '') {
+            fetchSuggestions(userQuery);
+        } else {
+            hideSuggestions();
+        }
+    });
+
+
+    function showSuggestions(suggestions) {
+        var suggestionsContainer = document.getElementById('suggestions-container');
+        suggestionsContainer.innerHTML = '';
+        
+        if (suggestions && suggestions.length > 0) {
+            suggestionsContainer.style.display = 'block';
+            
+            // Add title based on selected language
+            const selectedLang = document.getElementById('language-select').value;
+            const title = selectedLang === 'gu' ? 'સૂચનો:' : 'Suggestions:';
+            const titleDiv = document.createElement('div');
+            titleDiv.style.fontWeight = 'bold';
+            titleDiv.style.marginBottom = '10px';
+            titleDiv.innerText = title;
+            suggestionsContainer.appendChild(titleDiv);
+
+            // Create a Set to store unique suggestions and remove duplicates
+            const uniqueSuggestions = [...new Set(suggestions)];
+
+            uniqueSuggestions.forEach(function(suggestion) {
+                var suggestionDiv = document.createElement('div');
+                suggestionDiv.classList.add('suggestion');
+                suggestionDiv.innerText = suggestion;
+                suggestionDiv.onclick = function() {
+                    document.getElementById('user-input').value = suggestion;
+                    submitQuery(); // Auto-submit when suggestion is selected
+                    hideSuggestions();
+                };
+                suggestionsContainer.appendChild(suggestionDiv);
+            });
+        } else {
+            hideSuggestions();
+        }
+    }
+
+
+    // Hide the suggestions container
+    function hideSuggestions() {
+        document.getElementById('suggestions-container').style.display = 'none';
+    }
+
+
+
+
+    // Fetch suggestions based on query
+    // 
+    
+    // Fetch suggestions based on query
+    function fetchSuggestions(query) {
+        if (query.trim() !== '') {
+            const selectedLanguage = document.getElementById('language-select').value;
+            $.ajax({
+                url: '/get_suggestions',
+                method: 'POST',
+                data: { 
+                    query: query,
+                    language: selectedLanguage
+                },
+                success: function(response) {
+                    if (response.suggestions && response.suggestions.length > 0) {
+                        showSuggestions(response.suggestions);
+                    } else {
+                        hideSuggestions();
+                    }
+                },
+                error: function() {
+                    console.error('Error fetching suggestions');
+                    hideSuggestions();
+                }
+            });
+        } else {
+            hideSuggestions();
+        }
+    }
+
+    // Clear all chats
+    function clearChat() {
+        document.getElementById('chat-container').innerHTML = '';
+    }
+
+    // Add click handler to hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        const suggestionsContainer = document.getElementById('suggestions-container');
+        const userInput = document.getElementById('user-input');
+        
+        if (!suggestionsContainer.contains(e.target) && !userInput.contains(e.target)) {
+            hideSuggestions();
+        }
+    });
+
+    // Initialize UI with default language when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        updateUILanguage(document.getElementById('language-select').value);
+    });
+
+</script>
+
+
+
+
+</body>
+</html>
