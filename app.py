@@ -1,10 +1,19 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 from fuzzywuzzy import process
 from googletrans import Translator
 import logging
 from functools import lru_cache
 import unicodedata
+from gtts import gTTS
+import os
+import hashlib
+import tempfile
+
+# Create cache directory if it doesn't exist
+AUDIO_CACHE_DIR = "audio_cache"
+if not os.path.exists(AUDIO_CACHE_DIR):
+    os.makedirs(AUDIO_CACHE_DIR)
 
 def is_gujarati(text):
     """Check if the text contains Gujarati characters."""
@@ -27,7 +36,7 @@ logging.basicConfig(
 def load_chat_data():
     try:
         logging.info("Loading Excel file...")
-        df = pd.read_excel('data_final.xlsx')
+        df = pd.read_excel('data.xlsx')
         # df = pd.read_excel('data_final.xlsx', encoding='utf-8')
 
         logging.info("Excel file loaded successfully.")
@@ -144,7 +153,7 @@ def get_response():
 #     logging.warning("No suitable match found.")
 #     return "Sorry, I don't understand."
 
-def get_best_match_response(query, threshold=70):
+def get_best_match_response(query, threshold=75):
     if df is not None:
         queries = df['Query'].dropna().values
         responses = df['Response'].dropna().values
@@ -194,13 +203,17 @@ def get_suggestions():
     if df is not None:
         queries = df['Query'].dropna().values
         
-        # For Gujarati text
-        if is_gujarati(query):
+        # First determine if the input is Gujarati
+        is_gujarati_query = is_gujarati(query)
+        
+        # Filter queries based on language
+        if is_gujarati_query:
+            # For Gujarati text
             query_stripped = query.strip()
             gujarati_queries = [q.strip() for q in queries if is_gujarati(q)]
             
             # Try exact substring matches first
-            exact_matches = [q for q in gujarati_queries if query_stripped in q]
+            exact_matches = [q for q in gujarati_queries if query_stripped.lower() in q.lower()]
             if exact_matches:
                 return jsonify({'suggestions': exact_matches[:5]})
             
@@ -209,16 +222,49 @@ def get_suggestions():
             suggestions = [match[0] for match in matches if match[1] >= 75]
             return jsonify({'suggestions': suggestions})
         else:
-            # For non-Gujarati text
+            # For English text
+            # Filter out Gujarati queries first
+            english_queries = [q.strip() for q in queries if not is_gujarati(q)]
             normalized_query = query.lower().strip()
-            normalized_queries = [(q.strip().lower(), q.strip()) for q in queries]
-            matches = process.extract(normalized_query, [q[0] for q in normalized_queries], limit=5)
-            suggestions = [normalized_queries[i][1] for i in range(len(matches)) if matches[i][1] >= 60]
+            
+            # Try exact substring matches first
+            exact_matches = [q for q in english_queries if normalized_query in q.lower()]
+            if exact_matches:
+                return jsonify({'suggestions': exact_matches[:5]})
+            
+            # If no exact matches, use fuzzy matching
+            matches = process.extract(normalized_query, english_queries, limit=5)
+            suggestions = [match[0] for match in matches if match[1] >= 60]
             return jsonify({'suggestions': suggestions})
 
     return jsonify({'suggestions': []})
 
 
 
+@app.route('/get_speech', methods=['POST'])
+def get_speech():
+    text = request.form.get('text', '')
+    language = request.form.get('language', 'en')
+    
+    if not text:
+        return jsonify({'error': 'No text provided'}), 400
+    
+    # Generate a unique filename based on text and language
+    filename = hashlib.md5(f"{text}{language}".encode()).hexdigest() + '.mp3'
+    filepath = os.path.join(AUDIO_CACHE_DIR, filename)
+    
+    # Check if audio file already exists in cache
+    if not os.path.exists(filepath):
+        try:
+            # Convert text to speech
+            tts = gTTS(text=text, lang='gu' if language == 'gu' else 'en', slow=False)
+            # Save to cache
+            tts.save(filepath)
+        except Exception as e:
+            logging.error(f"TTS Error: {e}")
+            return jsonify({'error': 'TTS generation failed'}), 500
+    
+    return send_file(filepath, mimetype='audio/mpeg')
+
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)

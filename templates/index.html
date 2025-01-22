@@ -189,6 +189,49 @@
             border-radius: 12px;
         }
 
+        .voice-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            flex: 1;
+        }
+
+        /* Update voice-box styles */
+        .voice-box {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            gap: 12px;
+            width: 100%;
+            margin-top: 10px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+
+        /* Mobile responsive updates */
+        @media (max-width: 768px) {
+            .voice-box {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .voice-controls, .language-selection, .action-buttons {
+                width: 100%;
+            }
+            
+            .action-buttons {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+        }
+
         /* Modern button and select styling */
         .language-selection {
             display: flex;
@@ -307,24 +350,29 @@
         <div id="suggestions-container" class="suggestions-container"></div>
 
         <div class="voice-box">
-            <!-- Left side voice input button -->
-            <button id="voice-btn" class="btn btn-secondary voice-button" onclick="toggleVoiceInput()">🎙️ Start Voice Input</button>
+            <!-- Voice control buttons group -->
+            <div class="voice-controls">
+                <button id="voice-btn" class="btn btn-secondary voice-button" onclick="toggleVoiceInput()">🎙️ Start Voice Input</button>
+                <!-- <button id="stop-voice-btn" class="btn btn-warning voice-button" onclick="stopTextToVoice()">🔇 Stop Text to Voice</button> -->
+            </div>
 
             <!-- Language selection with label -->
             <div class="language-selection">
                 <div id="language-label" class="language-label">Your Language (તમારી ભાષા)</div>
                 <select id="language-select" class="form-control">
+                    <option value="gu">Gujarati</option>
+
                     <option value="english">English</option>
                     <!-- <option value="hi">Hindi</option> -->
-                    <option value="gu">Gujarati</option>
                 </select>
                 <div id="selected-language" class="selected-language"></div>
             </div>
 
-            <!-- Submit button on the right -->
-            <button class="btn btn-primary" onclick="submitQuery()">Submit</button>
-
-            <button class="btn btn-danger" onclick="clearChat()">Clear Chat</button>
+            <!-- Action buttons -->
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="submitQuery()">Submit</button>
+                <button class="btn btn-danger" onclick="clearChat()">Clear Chat</button>
+            </div>
         </div>
     </div>
 </div>
@@ -506,24 +554,116 @@
         });
     });
 
+    // Keep track of current speech utterance
+    let currentUtterance = null;
+
     function speakResponse(message, language) {
+        // Create form data for the request
+        const formData = new FormData();
+        formData.append('text', message);
+        formData.append('language', language);
+
+        // Cancel any ongoing speech
         if (synth.speaking) {
             synth.cancel();
         }
-        const speech = new SpeechSynthesisUtterance(message);
         
-        if (is_gujarati_text(message) || language === 'gu') {
-            speech.lang = 'gu-IN';
-            speech.rate = 1.5;  // Faster speed for Gujarati
-        } else {
-            speech.lang = 'en-US';
-            speech.rate = 1.5;  // Faster speed for English
+        // If there's a current utterance, remove its event listeners
+        if (currentUtterance) {
+            currentUtterance.onend = null;
+            currentUtterance.onerror = null;
         }
-        
-        speech.volume = 1.0;
-        speech.pitch = 1.0;
-        
-        synth.speak(speech);
+
+        // Make request to get speech audio
+        fetch('/get_speech', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.blob())
+        .then(blob => {
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.playbackRate = 1.2; // Slightly faster playback for better flow
+            audio.play().catch(e => {
+                console.error('Audio playback failed:', e);
+                // Enhanced fallback to browser's TTS
+                if (window.speechSynthesis) {
+                    const speech = new SpeechSynthesisUtterance(message);
+                    currentUtterance = speech;
+                    
+                    // Optimized voice settings for Gujarati
+                    if (is_gujarati_text(message) || language === 'gu') {
+                        speech.lang = 'gu-IN';
+                        speech.rate = 2.0;     // Balanced speed for clarity
+                        speech.pitch = 1.0;   // Slightly higher pitch for female voice
+                        speech.volume = 1.0;   // Full volume
+                        
+                        // Try to select a female voice if available
+                        const gujaratiVoice = voices.find(voice => 
+                            voice.lang.includes('gu') && voice.name.toLowerCase().includes('female')
+                        );
+                        if (gujaratiVoice) {
+                            speech.voice = gujaratiVoice;
+                        }
+                    } else {
+                        speech.lang = 'en-US';
+                        speech.rate = 2.0;
+                        speech.pitch = 1.0;
+                        speech.volume = 1.0;
+                    }
+                    
+                    // Event handlers
+                    speech.onend = function() {
+                        currentUtterance = null;
+                        console.log('Speech finished');
+                    };
+                    
+                    speech.onerror = function(event) {
+                        currentUtterance = null;
+                        console.error('Speech error:', event);
+                    };
+                    
+                    synth.speak(speech);
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching speech:', error);
+            // Fallback with the same optimized settings
+            if (window.speechSynthesis) {
+                const speech = new SpeechSynthesisUtterance(message);
+                currentUtterance = speech;
+                
+                if (is_gujarati_text(message) || language === 'gu') {
+                    speech.lang = 'gu-IN';
+                    speech.rate = 1.2;
+                    speech.pitch = 1.15;
+                    speech.volume = 1.0;
+                    
+                    const gujaratiVoice = voices.find(voice => 
+                        voice.lang.includes('gu') && voice.name.toLowerCase().includes('female')
+                    );
+                    if (gujaratiVoice) {
+                        speech.voice = gujaratiVoice;
+                    }
+                } else {
+                    speech.lang = 'en-US';
+                    speech.rate = 1.0;
+                    speech.pitch = 1.0;
+                }
+                
+                speech.onend = function() {
+                    currentUtterance = null;
+                    console.log('Speech finished');
+                };
+                
+                speech.onerror = function(event) {
+                    currentUtterance = null;
+                    console.error('Speech error:', event);
+                };
+                
+                synth.speak(speech);
+            }
+        });
     }
 
 
@@ -716,34 +856,68 @@
     // Fetch suggestions based on query
     function fetchSuggestions(query) {
         if (query.trim() !== '') {
+            // First check if the input contains Gujarati characters
+            const isGujaratiInput = is_gujarati_text(query);
             const selectedLanguage = document.getElementById('language-select').value;
-            $.ajax({
-                url: '/get_suggestions',
-                method: 'POST',
-                data: { 
-                    query: query,
-                    language: selectedLanguage
-                },
-                success: function(response) {
-                    if (response.suggestions && response.suggestions.length > 0) {
-                        showSuggestions(response.suggestions);
-                    } else {
+            
+            // Only proceed if the input language matches the selected language
+            if ((isGujaratiInput && selectedLanguage === 'gu') || 
+                (!isGujaratiInput && selectedLanguage === 'english')) {
+                
+                $.ajax({
+                    url: '/get_suggestions',
+                    method: 'POST',
+                    data: { 
+                        query: query,
+                        language: selectedLanguage
+                    },
+                    success: function(response) {
+                        if (response.suggestions && response.suggestions.length > 0) {
+                            showSuggestions(response.suggestions);
+                        } else {
+                            hideSuggestions();
+                        }
+                    },
+                    error: function() {
+                        console.error('Error fetching suggestions');
                         hideSuggestions();
                     }
-                },
-                error: function() {
-                    console.error('Error fetching suggestions');
-                    hideSuggestions();
-                }
-            });
+                });
+            } else {
+                // If language doesn't match, hide suggestions
+                hideSuggestions();
+            }
         } else {
             hideSuggestions();
+        }
+    }
+    // Clear all chats
+    function clearChat() {
+        document.getElementById('chat-container').innerHTML = '';
+        // Cancel any ongoing speech
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+        }
+        if (isVoiceActive) {
+            stopVoiceInput();
+        }
+        
+    }
+    // Function to stop text-to-voice
+    function stopTextToVoice() {
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+        }
+        // Also stop voice input if active
+        if (isVoiceActive) {
+            stopVoiceInput();
         }
     }
 
     // Clear all chats
     function clearChat() {
         document.getElementById('chat-container').innerHTML = '';
+        stopTextToVoice(); // Stop any ongoing speech when clearing chat
     }
 
     // Add click handler to hide suggestions when clicking outside
