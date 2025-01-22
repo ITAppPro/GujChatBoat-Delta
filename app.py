@@ -1,18 +1,19 @@
-from flask import Flask, render_template, request, jsonify, send_file, Response
-from voice_handler import VoiceHandler
+from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 from fuzzywuzzy import process
 from googletrans import Translator
 import logging
 from functools import lru_cache
 import unicodedata
+from gtts import gTTS
 import os
 import hashlib
-import pyttsx3
-import io
 import tempfile
-import threading
 
+# Create cache directory if it doesn't exist
+AUDIO_CACHE_DIR = "audio_cache"
+if not os.path.exists(AUDIO_CACHE_DIR):
+    os.makedirs(AUDIO_CACHE_DIR)
 
 def is_gujarati(text):
     """Check if the text contains Gujarati characters."""
@@ -22,13 +23,8 @@ def is_gujarati(text):
     return False
 
 app = Flask(__name__)
-voice_handler = VoiceHandler()  # Create a single instance for the application
-
-# Initialize pyttsx3 engine
-engine = pyttsx3.init()
 
 # Set up logging
-
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -245,63 +241,30 @@ def get_suggestions():
 
 
 
-@app.route('/speak', methods=['POST'])
-def speak_text():
-    try:
-        data = request.get_json()
-        text = data.get('text', '')
-        language = data.get('language', 'en')  # 'en' or 'gu'
-        
-        # Use a single speed setting for better consistency
-        voice_handler.speak_slow(text, language=language)
-            
-        return jsonify({'status': 'success', 'message': 'Text spoken successfully'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-
-
 @app.route('/get_speech', methods=['POST'])
 def get_speech():
-    text = request.form.get('text')
-    language = request.form.get('language')
+    text = request.form.get('text', '')
+    language = request.form.get('language', 'en')
     
-    # Configure speech properties
-    engine.setProperty('rate', 200)  # Increased speed for better clarity
+    if not text:
+        return jsonify({'error': 'No text provided'}), 400
     
-    # Set voice based on language
-    voices = engine.getProperty('voices')
-    if language == 'gu':
-        # Try to find an Indian voice
-        for voice in voices:
-            if 'indian' in voice.name.lower():
-                engine.setProperty('voice', voice.id)
-                break
-    else:
-        # Set default voice for English
-        engine.setProperty('voice', voices[0].id)
+    # Generate a unique filename based on text and language
+    filename = hashlib.md5(f"{text}{language}".encode()).hexdigest() + '.mp3'
+    filepath = os.path.join(AUDIO_CACHE_DIR, filename)
     
-    # Create a temporary file to store the audio
-    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
-        # Save speech to temporary file
-        engine.save_to_file(text, temp_file.name)
-        engine.runAndWait()
-        
-        # Read the generated audio file
-        with open(temp_file.name, 'rb') as audio_file:
-            audio_data = audio_file.read()
+    # Check if audio file already exists in cache
+    if not os.path.exists(filepath):
+        try:
+            # Convert text to speech
+            tts = gTTS(text=text, lang='gu' if language == 'gu' else 'en', slow=False)
+            # Save to cache
+            tts.save(filepath)
+        except Exception as e:
+            logging.error(f"TTS Error: {e}")
+            return jsonify({'error': 'TTS generation failed'}), 500
     
-    # Clean up the temporary file
-    os.unlink(temp_file.name)
-    
-    # Return the audio data as a response
-    return Response(
-        audio_data,
-        mimetype='audio/mp3',
-        headers={'Content-Type': 'audio/mp3'}
-    )
-
+    return send_file(filepath, mimetype='audio/mpeg')
 
 if __name__ == '__main__':
     app.run(debug=True)
