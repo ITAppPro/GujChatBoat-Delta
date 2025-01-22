@@ -1,19 +1,25 @@
+import platform
+import os
+import logging
 from flask import Flask, render_template, request, jsonify, send_file
 import pandas as pd
 from fuzzywuzzy import process
 from googletrans import Translator
-import logging
 from functools import lru_cache
 import unicodedata
 from gtts import gTTS
-import os
 import hashlib
 import tempfile
 
-# Create cache directory if it doesn't exist
-AUDIO_CACHE_DIR = "audio_cache"
+# Create cache directory based on platform
+if platform.system() == 'Linux':
+    AUDIO_CACHE_DIR = os.path.join(tempfile.gettempdir(), "gujchatbot_cache")
+else:
+    AUDIO_CACHE_DIR = "audio_cache"
+
 if not os.path.exists(AUDIO_CACHE_DIR):
     os.makedirs(AUDIO_CACHE_DIR)
+
 
 def is_gujarati(text):
     """Check if the text contains Gujarati characters."""
@@ -256,7 +262,7 @@ def get_speech():
     # Check if audio file already exists in cache
     if not os.path.exists(filepath):
         try:
-            # Convert text to speech
+            # Convert text to speech using gTTS
             tts = gTTS(text=text, lang='gu' if language == 'gu' else 'en', slow=False)
             # Save to cache
             tts.save(filepath)
